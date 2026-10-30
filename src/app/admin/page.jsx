@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Users, Search, CheckCircle2, ChevronLeft, ChevronRight, FileCheck, FileX, CreditCard, FileText, X, ChevronDown } from "lucide-react";
+import { Loader2, Users, Search, CheckCircle2, ChevronLeft, ChevronRight, FileCheck, FileX, CreditCard, FileText, X, ChevronDown, MapPin, Copy, Check, Download, ExternalLink } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
 
@@ -232,7 +232,7 @@ export default function AdminDashboard() {
               <thead className="bg-zinc-50/80 text-xs uppercase text-zinc-500 border-b border-zinc-200 font-bold tracking-wider">
                 <tr>
                   <th className="px-6 py-4 w-40">Date</th>
-                  <th className="px-6 py-4 w-48">Name / Phone</th>
+                  <th className="px-6 py-4 min-w-[240px] max-w-[290px]">Name / Phone / Address</th>
                   <th className="px-6 py-4">Documents</th>
                   <th className="px-6 py-4">Payment</th>
                   <th className="px-6 py-4 w-48">Status & Info</th>
@@ -320,8 +320,126 @@ export default function AdminDashboard() {
   );
 }
 
+function CopyButton({ text, label = "text", className = "" }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!text) return;
+
+    let success = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        success = true;
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        success = document.execCommand("copy");
+        textArea.remove();
+      }
+    } catch (err) {
+      success = false;
+    }
+
+    if (success) {
+      setCopied(true);
+      const formattedLabel = label ? label.charAt(0).toUpperCase() + label.slice(1) : "Text";
+      toast.success(`${formattedLabel} copied!`, {
+        id: `copy-${label}-${text.slice(0, 10)}`,
+        duration: 1800,
+      });
+      setTimeout(() => setCopied(false), 1800);
+    } else {
+      toast.error("Failed to copy");
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title={`Copy ${label}`}
+      className={`p-1 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200/60 active:scale-95 transition-all flex-shrink-0 inline-flex items-center justify-center ${className}`}
+      aria-label={`Copy ${label}`}
+    >
+      {copied ? (
+        <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
+      ) : (
+        <Copy className="w-3.5 h-3.5" />
+      )}
+    </button>
+  );
+}
+
+function DocumentBadge({ url, docName, applicantName }) {
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!url) return;
+
+    try {
+      setDownloading(true);
+      const safeName = `${(applicantName || "Customer").replace(/[^a-zA-Z0-9_-]/g, "_")}_${docName}`;
+      const downloadUrl = `/api/admin/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(safeName)}`;
+      
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = safeName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      
+      toast.success(`Downloading ${docName}...`, { id: `dl-${safeName}`, duration: 1500 });
+    } catch (err) {
+      toast.error(`Failed to download ${docName}`);
+    } finally {
+      setTimeout(() => setDownloading(false), 1000);
+    }
+  };
+
+  return (
+    <div className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50/80 text-blue-700 text-[11px] font-semibold overflow-hidden shadow-xs hover:border-blue-300 transition-colors">
+      <button
+        type="button"
+        onClick={handleDownload}
+        disabled={downloading}
+        title={`Download ${docName}`}
+        className="inline-flex items-center gap-1 px-2 py-0.5 hover:bg-blue-100/90 text-blue-700 transition-colors disabled:opacity-50"
+      >
+        {downloading ? (
+          <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+        ) : (
+          <Download className="w-3 h-3 text-blue-600" />
+        )}
+        <span>{docName}</span>
+      </button>
+
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        title={`Preview ${docName} in new tab`}
+        className="px-1.5 py-0.5 border-l border-blue-200/80 hover:bg-blue-100/90 text-blue-500 hover:text-blue-700 transition-colors inline-flex items-center"
+      >
+        <ExternalLink className="w-2.5 h-2.5" />
+      </a>
+    </div>
+  );
+}
+
 function TableRow({ item, savingRemark, onSaveRemark, savingStatus, onSaveStatus, savingWaTag, onWaTag }) {
   const [localRemark, setLocalRemark] = useState(item.remarks || "");
+  const [downloadingAll, setDownloadingAll] = useState(false);
   const isChanged = localRemark !== (item.remarks || "");
 
   // Use the relevant ID and Type for saving remarks
@@ -331,6 +449,43 @@ function TableRow({ item, savingRemark, onSaveRemark, savingStatus, onSaveStatus
   // Check if item is created within the last 24 hours
   const dateToUse = item.latestDate || item.createdAt;
   const isNew = new Date(dateToUse).getTime() > Date.now() - 24 * 60 * 60 * 1000;
+
+  const handleDownloadAllDocs = async () => {
+    const docs = [
+      { url: item.profilePicUrl, name: "Photo" },
+      { url: item.aadharUrl, name: "Aadhar" },
+      { url: item.panUrl, name: "PAN" },
+    ].filter((d) => !!d.url);
+
+    if (docs.length === 0) {
+      toast.error("No documents available to download");
+      return;
+    }
+
+    try {
+      setDownloadingAll(true);
+      toast.success(`Downloading ${docs.length} document(s)...`, { id: `dl-all-${targetId}`, duration: 2000 });
+
+      for (let i = 0; i < docs.length; i++) {
+        const doc = docs[i];
+        const safeName = `${(item.name || "Customer").replace(/[^a-zA-Z0-9_-]/g, "_")}_${doc.name}`;
+        const downloadUrl = `/api/admin/download?url=${encodeURIComponent(doc.url)}&filename=${encodeURIComponent(safeName)}`;
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = safeName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        if (i < docs.length - 1) {
+          await new Promise((res) => setTimeout(res, 500));
+        }
+      }
+    } catch (e) {
+      toast.error("Error downloading files");
+    } finally {
+      setTimeout(() => setDownloadingAll(false), 1200);
+    }
+  };
 
   const handleSaveRemarkLocal = () => {
     if (isChanged) {
@@ -352,7 +507,7 @@ function TableRow({ item, savingRemark, onSaveRemark, savingStatus, onSaveStatus
 
   return (
     <tr className={`transition-colors ${isNew ? 'bg-blue-50/30 hover:bg-blue-50/60' : 'hover:bg-zinc-50/80'}`}>
-      <td className="px-6 py-5 whitespace-nowrap relative">
+      <td className="px-6 py-5 whitespace-nowrap relative align-top">
         {isNew && (
           <div className="absolute top-1/2 -translate-y-1/2 left-0 w-1 h-8 bg-blue-500 rounded-r-full"></div>
         )}
@@ -367,33 +522,55 @@ function TableRow({ item, savingRemark, onSaveRemark, savingStatus, onSaveStatus
         </div>
       </td>
       
-      <td className="px-6 py-5 whitespace-nowrap">
-        <div className="font-bold text-zinc-900 text-base">{item.name}</div>
-        <a href={`https://wa.me/91${item.phone?.replace(/\D/g, "")}?text=${encodeURIComponent("Hi sir apko food license banwana hai kya")}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-700 font-medium hover:underline mt-1 block">
-          {item.phone}
-        </a>
+      <td className="px-6 py-5 min-w-[240px] max-w-[290px] align-top">
+        <div className="flex items-center justify-between gap-1">
+          <div className="font-bold text-zinc-900 text-base leading-tight">{item.name}</div>
+          <CopyButton text={item.name} label="name" />
+        </div>
+
+        <div className="flex items-center gap-1 mt-1">
+          <a
+            href={`https://wa.me/91${item.phone?.replace(/\D/g, "")}?text=${encodeURIComponent("Hi sir apko food license banwana hai kya")}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-600 hover:text-blue-700 font-medium hover:underline text-sm"
+          >
+            {item.phone}
+          </a>
+          <CopyButton text={item.phone} label="phone" />
+        </div>
+
         {item.email && (
           <div className="flex items-center gap-1 mt-0.5">
-            <a href={`mailto:${item.email}`} className="text-zinc-500 hover:text-zinc-700 text-xs hover:underline truncate max-w-[160px]">
+            <a
+              href={`mailto:${item.email}`}
+              className="text-zinc-500 hover:text-zinc-700 text-xs hover:underline truncate max-w-[170px]"
+              title={item.email}
+            >
               {item.email}
             </a>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(item.email);
-                const btn = document.getElementById(`copy-email-${item._id}`);
-                if (btn) { btn.textContent = '✓'; setTimeout(() => { btn.textContent = '⎘'; }, 1500); }
-              }}
-              id={`copy-email-${item._id}`}
-              title="Copy email"
-              className="text-[11px] text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded px-1 py-0.5 transition-colors flex-shrink-0"
-            >⎘</button>
+            <CopyButton text={item.email} label="email" />
           </div>
         )}
+
+        {item.address && (
+          <div className="flex items-start gap-1.5 mt-2 p-2 bg-zinc-50 hover:bg-zinc-100/90 rounded-lg border border-zinc-200/80 group/addr transition-colors">
+            <MapPin className="w-3.5 h-3.5 text-zinc-400 mt-0.5 shrink-0 group-hover/addr:text-blue-500 transition-colors" />
+            <span
+              className="text-[11px] text-zinc-700 font-medium leading-snug break-words flex-1 select-all"
+              title={item.address}
+            >
+              {item.address}
+            </span>
+            <CopyButton text={item.address} label="address" className="hover:text-blue-600" />
+          </div>
+        )}
+
         <button
           onClick={() => onWaTag(targetId, targetType, !item.waMessaged)}
           disabled={savingWaTag === targetId}
           title={item.waMessaged ? "Click to remove WA tag" : "Mark as WA Messaged"}
-          className={`mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all ${
+          className={`mt-2 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all ${
             item.waMessaged
               ? "bg-green-100 text-green-700 border-green-300 hover:bg-green-200"
               : "bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200"
@@ -408,21 +585,58 @@ function TableRow({ item, savingRemark, onSaveRemark, savingStatus, onSaveStatus
         </button>
       </td>
 
-      <td className="px-6 py-5 whitespace-nowrap">
+      <td className="px-6 py-5 whitespace-nowrap align-top">
         {item.isRegistered ? (
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 text-xs font-medium text-zinc-700">
-              {item.docCount === 3 ? (
-                <FileCheck className="w-4 h-4 text-green-600" />
-              ) : (
-                <FileText className="w-4 h-4 text-amber-600" />
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-700">
+                {item.docCount === 3 ? (
+                  <FileCheck className="w-4 h-4 text-emerald-600" />
+                ) : (
+                  <FileText className="w-4 h-4 text-amber-600" />
+                )}
+                <span>{item.docCount}/3 Uploaded</span>
+              </div>
+              {item.docCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDownloadAllDocs}
+                  disabled={downloadingAll}
+                  title="Download all documents"
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-full border border-blue-200 transition-all shadow-xs active:scale-95 disabled:opacity-50"
+                >
+                  {downloadingAll ? (
+                    <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+                  ) : (
+                    <Download className="w-3 h-3" />
+                  )}
+                  <span>All</span>
+                </button>
               )}
-              {item.docCount}/3 Uploaded
             </div>
-            <div className="flex gap-2 mt-1">
-              {item.profilePicUrl && <a href={item.profilePicUrl} target="_blank" rel="noreferrer" className="text-[10px] bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded hover:bg-blue-100">Photo</a>}
-              {item.aadharUrl && <a href={item.aadharUrl} target="_blank" rel="noreferrer" className="text-[10px] bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded hover:bg-blue-100">Aadhar</a>}
-              {item.panUrl && <a href={item.panUrl} target="_blank" rel="noreferrer" className="text-[10px] bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded hover:bg-blue-100">PAN</a>}
+
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {item.profilePicUrl && (
+                <DocumentBadge
+                  url={item.profilePicUrl}
+                  docName="Photo"
+                  applicantName={item.name}
+                />
+              )}
+              {item.aadharUrl && (
+                <DocumentBadge
+                  url={item.aadharUrl}
+                  docName="Aadhar"
+                  applicantName={item.name}
+                />
+              )}
+              {item.panUrl && (
+                <DocumentBadge
+                  url={item.panUrl}
+                  docName="PAN"
+                  applicantName={item.name}
+                />
+              )}
             </div>
           </div>
         ) : (
@@ -433,7 +647,7 @@ function TableRow({ item, savingRemark, onSaveRemark, savingStatus, onSaveStatus
         )}
       </td>
       
-      <td className="px-6 py-5 whitespace-nowrap">
+      <td className="px-6 py-5 whitespace-nowrap align-top">
         {item.isRegistered ? (
           <div className="flex flex-col gap-1.5">
             <span
@@ -457,7 +671,7 @@ function TableRow({ item, savingRemark, onSaveRemark, savingStatus, onSaveStatus
         )}
       </td>
 
-      <td className="px-6 py-5 whitespace-nowrap">
+      <td className="px-6 py-5 whitespace-nowrap align-top">
         <div className="flex flex-col gap-2">
           <div className="relative group/select">
             <Select 
@@ -498,7 +712,7 @@ function TableRow({ item, savingRemark, onSaveRemark, savingStatus, onSaveStatus
         </div>
       </td>
 
-      <td className="px-6 py-5">
+      <td className="px-6 py-5 align-top">
         <div className="flex flex-col gap-2 relative group">
           <textarea
             value={localRemark}

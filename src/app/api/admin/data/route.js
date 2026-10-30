@@ -18,16 +18,25 @@ export async function GET(req) {
     const search = url.searchParams.get("search") || "";
     const statusFilter = url.searchParams.get("status") || "ALL";
 
-    const matchQuery = search ? {
+    const leadMatchQuery = search ? {
       $or: [
         { name: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } }
       ]
     } : {};
 
+    const regMatchQuery = search ? {
+      $or: [
+        { name: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { address: { $regex: search, $options: "i" } }
+      ]
+    } : {};
+
     // Fetch matching leads and registrations
-    const leads = await Lead.find(matchQuery).lean();
-    const registrations = await Registration.find(matchQuery).lean();
+    const leads = await Lead.find(leadMatchQuery).lean();
+    const registrations = await Registration.find(regMatchQuery).lean();
 
     // Unify Leads and Registrations by phone number
     const combinedMap = new Map();
