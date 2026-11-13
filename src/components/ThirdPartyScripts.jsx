@@ -1,87 +1,70 @@
 "use client";
 
 import { useEffect } from "react";
+import { META_PIXEL_ID } from "@/lib/meta-pixel";
 
-// Easily manage multiple tracking IDs here
 const CONFIG = {
-  googleAnalyticsIds: ["G-XVLEDXG07G"], // You can add multiple GA IDs here in the future
-  metaPixelIds: ["1223249586587487"], // Add or remove Meta Pixel IDs here
+  googleAnalyticsIds: ["G-XVLEDXG07G"],
+  metaPixelIds: [META_PIXEL_ID],
 };
 
-// Initialize the window objects and stubs synchronously if in browser
+// Initialize window tracking stubs synchronously
 if (typeof window !== "undefined") {
-  // GA stub
+  // Google Analytics stub
   window.dataLayer = window.dataLayer || [];
   if (!window.gtag) {
-    window.gtag = function(){window.dataLayer.push(arguments);}
-    window.gtag('js', new Date());
-    CONFIG.googleAnalyticsIds.forEach(id => {
-      window.gtag('config', id);
+    window.gtag = function () {
+      window.dataLayer.push(arguments);
+    };
+    window.gtag("js", new Date());
+    CONFIG.googleAnalyticsIds.forEach((id) => {
+      window.gtag("config", id);
     });
   }
 
   // Meta Pixel stub
   if (CONFIG.metaPixelIds.length > 0 && !window.fbq) {
     const f = window;
-    const n = f.fbq = function() {
+    const n = (f.fbq = function () {
       n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
-    };
+    });
     if (!f._fbq) f._fbq = n;
     n.push = n;
-    n.loaded = !0;
-    n.version = '2.0';
+    n.loaded = true;
+    n.version = "2.0";
     n.queue = [];
-    
-    CONFIG.metaPixelIds.forEach(id => {
-      window.fbq('init', id);
+
+    CONFIG.metaPixelIds.forEach((id) => {
+      window.fbq("init", id);
     });
-    window.fbq('track', 'PageView');
+    window.fbq("track", "PageView");
   }
 }
 
 export default function ThirdPartyScripts() {
   useEffect(() => {
-    let scriptsLoaded = false;
-
-    const loadScripts = () => {
-      if (scriptsLoaded) return;
-      scriptsLoaded = true;
-
-      // Remove event listeners once loaded
-      triggerEvents.forEach((event) => {
-        window.removeEventListener(event, loadScripts);
-      });
-
-      // 1. Initialize Google Analytics dynamically
-      if (CONFIG.googleAnalyticsIds.length > 0) {
-        // Load the main gtag script using the first ID
-        const gaScript = document.createElement("script");
-        gaScript.async = true;
-        gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${CONFIG.googleAnalyticsIds[0]}`;
-        document.head.appendChild(gaScript);
-      }
-
-      // 2. Initialize Meta Pixels dynamically
-      if (CONFIG.metaPixelIds.length > 0) {
-        const t = document.createElement('script');
-        t.async = !0;
-        t.src = 'https://connect.facebook.net/en_US/fbevents.js';
-        const s = document.getElementsByTagName('script')[0];
+    // 1. Immediately inject Meta Pixel script (vital for ad attribution & ROAS)
+    if (CONFIG.metaPixelIds.length > 0 && !document.getElementById("facebook-jssdk")) {
+      const t = document.createElement("script");
+      t.id = "facebook-jssdk";
+      t.async = true;
+      t.src = "https://connect.facebook.net/en_US/fbevents.js";
+      const s = document.getElementsByTagName("script")[0];
+      if (s && s.parentNode) {
         s.parentNode.insertBefore(t, s);
+      } else {
+        document.head.appendChild(t);
       }
-    };
+    }
 
-    const triggerEvents = ["mouseover", "keydown", "touchstart", "scroll"];
-
-    triggerEvents.forEach((event) => {
-      window.addEventListener(event, loadScripts, { passive: true });
-    });
-
-    return () => {
-      triggerEvents.forEach((event) => {
-        window.removeEventListener(event, loadScripts);
-      });
-    };
+    // 2. Inject Google Analytics script
+    if (CONFIG.googleAnalyticsIds.length > 0 && !document.getElementById("google-gtag")) {
+      const gaScript = document.createElement("script");
+      gaScript.id = "google-gtag";
+      gaScript.async = true;
+      gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${CONFIG.googleAnalyticsIds[0]}`;
+      document.head.appendChild(gaScript);
+    }
   }, []);
 
   if (CONFIG.metaPixelIds.length === 0) return null;

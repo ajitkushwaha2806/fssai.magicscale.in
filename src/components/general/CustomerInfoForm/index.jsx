@@ -10,6 +10,7 @@ import { useRegistration } from "@/hooks/useRegistration";
 import { useAppConfigStore } from "@/stores/app-config.store";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { User, Phone, Loader2, CheckCircle2, Lock, Mail, MapPin, Building, Map, ChevronRight, ChevronLeft } from "lucide-react";
+import { trackLead, trackInitiateCheckout, setMetaUserData } from "@/lib/meta-pixel";
 
 const businessTypes = [
   { id: "food-cart", label: "Food Cart / Stall", image: "/assets/images/street-food-cart.webp" },
@@ -176,19 +177,30 @@ export default function ReserveSeatDialog({ open, onOpenChange }) {
         });
 
         posthog.capture("lead_captured", { plan_id: plan?._id });
-        if (typeof window !== "undefined" && window.fbq) {
-          window.fbq("track", "Lead", { 
-            content_name: "FSSAI Application Lead",
-            content_category: values.businessType,
-            currency: "INR",
-            value: parseFloat(plan?.price || 0)
-          });
-        }
+        trackLead({
+          name: values.name.trim(),
+          phone: values.phone.trim(),
+          businessType: values.businessType,
+          value: parseFloat(plan?.price || 699),
+          planId: plan?._id,
+        });
       } catch (error) {
         console.error("Failed to save lead", error);
       } finally {
         setIsCapturingLead(false);
       }
+    }
+
+    if (currentStep === 2) {
+      // Update Meta Advanced Matching with address & email before documents step
+      setMetaUserData({
+        name: values.name.trim(),
+        phone: values.phone.trim(),
+        email: values.email?.trim(),
+        city: values.city?.trim(),
+        state: values.state?.trim(),
+        pincode: values.pincode?.trim(),
+      });
     }
 
     setDirection(1);
@@ -286,16 +298,16 @@ export default function ReserveSeatDialog({ open, onOpenChange }) {
               // Fire Checkout events
               const advanceAmount = plan.advancePrice || 100;
               posthog.capture("checkout_initiated", { plan_id: plan._id, amount: advanceAmount, total_amount: plan.price });
-              if (typeof window !== "undefined" && window.fbq) {
-                window.fbq("track", "InitiateCheckout", { 
-                  value: parseFloat(advanceAmount), 
-                  currency: "INR",
-                  content_name: "FSSAI License Registration Advance",
-                  content_type: "product",
-                  content_ids: [plan._id || "fssai_plan"],
-                  num_items: 1
-                });
-              }
+              trackInitiateCheckout({
+                planId: plan._id,
+                amount: advanceAmount,
+                name: values.name.trim(),
+                phone: values.phone.trim(),
+                email: values.email?.trim(),
+                city: values.city?.trim(),
+                state: values.state?.trim(),
+                pincode: values.pincode,
+              });
 
               await registration.mutateAsync({
                 name: values.name.trim(),

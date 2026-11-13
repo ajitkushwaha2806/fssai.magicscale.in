@@ -1,14 +1,23 @@
 "use client";
-import React from "react";
+import React, { useEffect } from "react";
 import Title from "../Title";
 import PayButton from "../Payment/PayButton";
 import SectionWrapper from "../SectionWrapper";
 import { Check, Shield, Zap } from "lucide-react";
 import { Highlighter } from "@/components/ui/highlighter";
 import { useAppConfigStore } from "@/stores/app-config.store";
+import { trackViewContent } from "@/lib/meta-pixel";
 
 export default function Pricing() {
   const plan = useAppConfigStore((state) => state.plan);
+
+  useEffect(() => {
+    trackViewContent({
+      name: plan?.title || "1-Year FSSAI Registration",
+      value: plan?.price || 699,
+      id: plan?._id || "fssai_1yr",
+    });
+  }, [plan]);
 
   const features = [
     "1-Year FSSAI Registration",

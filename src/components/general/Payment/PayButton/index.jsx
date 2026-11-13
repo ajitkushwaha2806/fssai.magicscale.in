@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import posthog from "posthog-js";
 import ReserveSeatDialog from "../../CustomerInfoForm";
+import { trackApplicationFormOpened } from "@/lib/meta-pixel";
 
 export default function PayButton() {
   const [open, setOpen] = useState(false);
@@ -13,9 +14,7 @@ export default function PayButton() {
       <button
         onClick={() => {
           posthog.capture("application_form_opened");
-          if (typeof window !== "undefined" && window.fbq) {
-            window.fbq("track", "InitiateCheckout", { content_name: "FSSAI Application Form Opened" });
-          }
+          trackApplicationFormOpened({ content_name: "FSSAI Application Form Opened" });
           setOpen(true);
         }}
         className="group flex-1 w-full rounded-md bg-[#22c55e] px-5 py-3 font-semibold text-white shadow-lg shadow-green-600/20 transition-all duration-300 hover:bg-green-700 active:scale-[0.98]"

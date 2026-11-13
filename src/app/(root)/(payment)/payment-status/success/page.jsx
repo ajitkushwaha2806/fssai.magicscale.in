@@ -4,6 +4,7 @@ import React, { useRef, useState, useEffect, Suspense } from "react";
 import posthog from "posthog-js";
 import { getRegistrationByOrderId } from "@/services/payment";
 import SectionWrapper from "@/components/general/SectionWrapper";
+import { trackPurchase } from "@/lib/meta-pixel";
 import {
   Sparkles,
   ArrowRight,
@@ -62,17 +63,15 @@ function SuccessPageContent() {
         plan_id: reg.planId,
       });
 
-      if (typeof window !== "undefined" && window.fbq) {
-        const purchaseValue = parseFloat(reg.amount || registrationDetails?.plan?.price || 0);
-        window.fbq("track", "Purchase", {
-          value: purchaseValue,
-          currency: "INR",
-          content_name: "FSSAI License Registration",
-          content_type: "product",
-          content_ids: [reg.planId || registrationDetails?.plan?._id || "fssai_plan"],
-          order_id: reg.orderId
-        });
-      }
+      trackPurchase({
+        orderId: reg.orderId,
+        amount: parseFloat(reg.amount || registrationDetails?.plan?.price || 100),
+        planId: reg.planId || registrationDetails?.plan?._id,
+        name: reg.name,
+        email: reg.email,
+        phone: reg.phone,
+        address: reg.address,
+      });
     }
   }, [isLoading, registrationDetails]);
 
